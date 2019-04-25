@@ -1,0 +1,54 @@
+global-policy: 1.0.0
+
+info:
+  name: ase-prehook
+  title: ASE Prehook Policy
+  version: 1.0.0
+
+gateways:
+  - datapower-api-gateway
+
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        title: Compose ASE request
+        source: "\ncontext.message.header.set('ase-token','20662581bbdc4865b662816c4e188377');\ncontext.message.header.set('x-correlationid',context.get('session.globalTransactionID'));\n\ncontext.message.body.write( \n{ \n\t\"source_ip\": context.get('request.headers.x-forwarded-for'),\n\t\"source_port\": null,\n\t\"method\": context.get('request.verb'), \n\t\"url\": context.get('request.path'), \n\t\"http_version\":\"1.0\",\n\t\"headers\":\n\t\t[\n        \t{\"host\": \"shop\"}, \n        \t{\"content-type\": context.get('request.headers.content-type')},\n            {\"content-length\": context.get('request.headers.content-length')}, \n            {\"x-forwarded-for\": context.get('request.headers.x-forwarded-for')},\n            {\"Authorization\": context.get('request.authorization')},\n            {\"user-agent\": context.get('request.headers.user-agent')}\n        ]\n}\n);\n"
+    - invoke:
+        version: 2.0.0
+        title: Send request to ASE
+        header-control:
+          type: whitelist
+          values:
+            - ase-token
+            - x-correlationid
+            - content-type
+        parameter-control:
+          type: whitelist
+          values: []
+        timeout: 60
+        verb: POST
+        cache-response: protocol
+        cache-ttl: 900
+        stop-on-error:
+          - OperationError
+          - SOAPError
+          - ConnectionError
+        target-url: 'http://pingase.com/ase/request'
+        inject-proxy-headers: false
+    - gatewayscript:
+        version: 2.0.0
+        title: gatewayscript
+        source: |
+
+          context.set('message.body', context.get('request.body'));
+
+          var h1 = context.message.headers;
+          var h2 = context.request.headers;
+          for (var i in h1) {
+              context.message.header.remove(i);
+          }
+
+            for (var j in h2) {
+                context.message.header.set(j, h2[j]);
+            }

@@ -1,0 +1,59 @@
+global-policy: 1.0.0
+
+info:
+  name: ase-posthook
+  title: ASE Posthook Policy
+  version: 1.0.0
+
+gateways:
+  - datapower-api-gateway
+
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        title: gatewayscript
+        source: "\ncontext.set('message.headers.ASE-Token',\"20662581bbdc4865b662816c4e188377\");\ncontext.set('message.headers.X-CorrelationID', context.get('session.globalTransactionID'));\n\ncontext.set('message.body', \n{ \n\t\"response_code\": context.get('backendResponse.status.code'), \n\t\"response_status\": context.get('backendResponse.status.reason'),\n\t\"headers\":\n\t\t[\n\t\t\t{ \"content-type\": context.get('backendResponse.headers.content-type')}, \n\t\t\t{\"content-length\": context.get('backendResponse.headers.content-length')}\n\t\t]\n}\n);\n"
+    - invoke:
+        version: 2.0.0
+        title: invoke
+        header-control:
+          type: blacklist
+          values: []
+        parameter-control:
+          type: whitelist
+          values: []
+        timeout: 60
+        verb: POST
+        cache-response: protocol
+        cache-ttl: 900
+        stop-on-error:
+          - OperationError
+          - SOAPError
+          - ConnectionError
+        description: Send response back to ASE
+        target-url: 'http://pingase.com/ase/response'
+    - gatewayscript:
+        version: 2.0.0
+        title: gatewayscript
+        source: >
+          // Retrive the response from the actual backend to send it
+          back to the client
+
+
+          context.set('message.body',
+          context.get('backendResponse.body'));
+
+
+          var h1 = context.message.headers;
+
+          var h2 = context.get('backendResponse.headers');
+
+          for (var i in h1) {
+              context.message.header.remove(i);
+          }
+
+
+          for (var j in h2) {
+              context.message.header.set(j, h2[j]);
+          }
