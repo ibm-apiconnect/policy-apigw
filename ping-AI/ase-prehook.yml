@@ -13,7 +13,24 @@ assembly:
     - gatewayscript:
         version: 2.0.0
         title: Compose ASE request
-        source: "\ncontext.message.header.set('ase-token','20662581bbdc4865b662816c4e188377');\ncontext.message.header.set('x-correlationid',context.get('session.globalTransactionID'));\n\ncontext.message.body.write( \n{ \n\t\"source_ip\": context.get('request.headers.x-forwarded-for'),\n\t\"source_port\": null,\n\t\"method\": context.get('request.verb'), \n\t\"url\": context.get('request.path'), \n\t\"http_version\":\"1.0\",\n\t\"headers\":\n\t\t[\n        \t{\"host\": \"shop\"}, \n        \t{\"content-type\": context.get('request.headers.content-type')},\n            {\"content-length\": context.get('request.headers.content-length')}, \n            {\"x-forwarded-for\": context.get('request.headers.x-forwarded-for')},\n            {\"Authorization\": context.get('request.authorization')},\n            {\"user-agent\": context.get('request.headers.user-agent')}\n        ]\n}\n);\n"
+        source: |
+          
+          context.message.header.set('ase-token','20662581bbdc4865b662816c4e188377');
+          context.message.header.set('x-correlationid',context.get('session.globalTransactionID'));
+          
+          context.message.body.write({
+            "source_ip": context.get('request.headers.x-forwarded-for'),
+            "source_port": null,
+            "method": context.get('request.verb'),
+            "url": context.get('request.path'),
+            "http_version":"1.0"
+          });
+          var h2 = context.request.headers;
+          for (var j in h2) {
+            context.message.header.set(j, h2[j]);
+          }
+          context.message.header.set('host', 'shop');
+          
     - invoke:
         version: 2.0.0
         title: Send request to ASE
