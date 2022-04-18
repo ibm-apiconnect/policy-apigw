@@ -9,7 +9,7 @@ This sample works by adding a check (a `switch` policy) to the preflow to determ
 
 The `switch` policy uses this information to route non-OAuth calls to a ratelimit policy with `source` set to `plan-default`, which is the same policy that would be used for an API call without this sample, or to a ratelimit policy with the `source` set to `catalog-named` and the `name` set to `oauth-rate-limit` as configured by the extension. 
 
-The main difference implemented by this sample is that the OAuth related calls now have the opportunity to drive the a pre-configured rate limit policy, where as before this change the OAuth calls did not drive the rate limit OAuth configuration is not mapped to a plan. 
+The main difference implemented by this sample is that the OAuth related calls now have the opportunity to drive the a pre-configured ratelimit policy, where as before this change the OAuth calls did not drive the rate limit OAuth configuration is not mapped to a plan. 
 
 For more informaton about customizing the preflow for an API Gateway, please read here<br/>
 https://www.ibm.com/docs/nl/api-connect/10.0.1.x?topic=policies-customizing-preflow
