@@ -14,7 +14,7 @@ For more information about gateway estensions read here:<br/>
 https://www.ibm.com/docs/en/api-connect/10.0.1.x?topic=behavior-configuring-your-gateway-server-extensions <br/>
 https://www.ibm.com/docs/en/api-connect/10.0.1.x?topic=behavior-gateway-extension-guidelines-datapower-api-gateway
 
-If you use have a gateway extension with a manifest, read here:
+If you use have a gateway extension with a manifest, read here:<br/>
 https://www.ibm.com/docs/en/api-connect/10.0.1.x?topic=gateway-extensions-manifest
 
 
