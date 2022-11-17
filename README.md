@@ -1,5 +1,6 @@
 # API Gateway Policies
-Sample global and custom policies for DataPower APIGateway
+Sample global and custom policies for DataPower APIGateway (part of IBM API Connect) 
+API Gateway is available in API Connect V10
 
 A global policy runs before or after certain APIs and is it's own assembly.
 A user defined policy is a "building block" in the assembly that does something in the API. have a look at [this very basic policy](./user-defined-policies/basic/README.md)
