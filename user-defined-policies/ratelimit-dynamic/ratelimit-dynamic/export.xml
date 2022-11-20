@@ -1,0 +1,191 @@
+<datapower-configuration version="3">
+    <export-details>
+        <description>Exported Configuration</description>
+        <user>admin</user>
+        <domain>v5e-test</domain>
+        <comment/>
+        <product-id>5725</product-id>
+        <product>IDG</product>
+        <display-product>IDG</display-product>
+        <model>IBM DataPower Gateway</model>
+        <display-model>IBM DataPower Gateway</display-model>
+        <device-name>burket-m4-dp</device-name>
+        <serial-number>0000000</serial-number>
+        <firmware-version>IDG.2018.4.1.10</firmware-version>
+        <display-firmware-version>IDG.2018.4.1.10</display-firmware-version>
+        <firmware-build>rel-2018-4-1-branch.316636</firmware-build>
+        <delivery-type>LTS</delivery-type>
+        <firmware-timestamp>2020/01/16 14:48:28</firmware-timestamp>
+        <current-date>2020-03-03</current-date>
+        <current-time>08:55:52 EST</current-time>
+        <reset-date>2020-01-28</reset-date>
+        <reset-time>15:16:21 EST</reset-time>
+        <login-message/>
+        <custom-ui-file/>
+    </export-details>
+    <configuration domain="v5e-test">
+        <AssemblyActionGatewayScript name="rate-limit-prepare" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>local:///policy/ratelimit-gwp/ratelimit-prep.js</Source>
+        </AssemblyActionGatewayScript>
+    
+        <AssemblyActionGatewayScript name="rate-log-action-r10-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>local:///policy/ratelimit-gwp/log-r10-per-min.js</Source>
+        </AssemblyActionGatewayScript>
+        <AssemblyActionRateLimit name="rate-action-r10-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>collection-named</Source>
+            <RateLimit>r10-per-min</RateLimit>
+            <APIConnectGatewayService class="APIConnectGatewayService">default</APIConnectGatewayService>
+            <GatewayPeeringManager class="GatewayPeeringManager">default</GatewayPeeringManager>
+        </AssemblyActionRateLimit>
+        <APIRule name="rate-rule-r10-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Actions class="AssemblyActionGatewayScript">rate-log-action-r10-per-min</Actions>
+            <Actions class="AssemblyActionRateLimit">rate-action-r10-per-min</Actions>
+        </APIRule>
+
+        <AssemblyActionGatewayScript name="rate-log-action-r5-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>local:///policy/ratelimit-gwp/log-r5-per-min.js</Source>
+        </AssemblyActionGatewayScript>
+        <AssemblyActionRateLimit name="rate-action-r5-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>collection-named</Source>
+            <RateLimit>r5-per-min</RateLimit>
+            <APIConnectGatewayService class="APIConnectGatewayService">default</APIConnectGatewayService>
+            <GatewayPeeringManager class="GatewayPeeringManager">default</GatewayPeeringManager>
+        </AssemblyActionRateLimit>
+        <APIRule name="rate-rule-r5-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Actions class="AssemblyActionGatewayScript">rate-log-action-r5-per-min</Actions>
+            <Actions class="AssemblyActionRateLimit">rate-action-r5-per-min</Actions>
+        </APIRule>
+
+        <AssemblyActionGatewayScript name="rate-log-action-r2-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>local:///policy/ratelimit-gwp/log-r2-per-min.js</Source>
+        </AssemblyActionGatewayScript>
+        <AssemblyActionRateLimit name="rate-action-r2-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>collection-named</Source>
+            <RateLimit>r2-per-min</RateLimit>
+            <APIConnectGatewayService class="APIConnectGatewayService">default</APIConnectGatewayService>
+            <GatewayPeeringManager class="GatewayPeeringManager">default</GatewayPeeringManager>
+        </AssemblyActionRateLimit>
+        <APIRule name="rate-rule-r2-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Actions class="AssemblyActionGatewayScript">rate-log-action-r2-per-min</Actions>
+            <Actions class="AssemblyActionRateLimit">rate-action-r2-per-min</Actions>
+        </APIRule>
+
+        <AssemblyActionGatewayScript name="rate-log-action-r1-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>local:///policy/ratelimit-gwp/log-r1-per-min.js</Source>
+        </AssemblyActionGatewayScript>
+        <AssemblyActionRateLimit name="rate-action-r1-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Source>collection-named</Source>
+            <RateLimit>r1-per-min</RateLimit>
+            <APIConnectGatewayService class="APIConnectGatewayService">default</APIConnectGatewayService>
+            <GatewayPeeringManager class="GatewayPeeringManager">default</GatewayPeeringManager>
+        </AssemblyActionRateLimit>
+        <APIRule name="rate-rule-r1-per-min" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Actions class="AssemblyActionGatewayScript">rate-log-action-r1-per-min</Actions>
+            <Actions class="AssemblyActionRateLimit">rate-action-r1-per-min</Actions>
+        </APIRule>
+
+        <AssemblyLogicSwitch name="ratelimit-switch" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <ActionDebug persisted="false">off</ActionDebug>
+            <Case>
+                <Condition>$header("plan")="r10-per-min"</Condition>
+                <Execute>rate-rule-r10-per-min</Execute>
+            </Case>
+            <Case>
+                <Condition>$header("plan")="r5-per-min"</Condition>
+                <Execute>rate-rule-r5-per-min</Execute>
+            </Case>
+            <Case>
+                <Condition>$header("plan")="r2-per-min"</Condition>
+                <Execute>rate-rule-r2-per-min</Execute>
+            </Case>
+            <Otherwise>rate-rule-r1-per-min</Otherwise>
+        </AssemblyLogicSwitch>
+
+        <APIRule name="rate-limit_1.0.0" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Actions class="AssemblyActionGatewayScript">rate-limit-prepare</Actions>
+            <Actions class="AssemblyLogicSwitch">ratelimit-switch</Actions>
+        </APIRule>
+        <Assembly name="rate-limit_1.0.0" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Rule class="APIRule">rate-limit_1.0.0</Rule>
+        </Assembly>
+        <AssemblyFunction name="rate-limit-gwp_1.0.0" 
+            xmlns:env="http://www.w3.org/2003/05/soap-envelope" 
+            xmlns:dp="http://www.datapower.com/schemas/management">
+            <mAdminState>enabled</mAdminState>
+            <Title>Rate Limit GWP</Title>
+            <Description>uses gateway peering</Description>
+            <Assembly class="Assembly">rate-limit_1.0.0</Assembly>
+        </AssemblyFunction>
+    </configuration>
+    <files>
+        <file name="local:///policy/ratelimit-gwp/ratelimit-prep.js" src="local/policy/ratelimit-gwp/ratelimit-prep.js" location="local" hash="HqiBFHrQcpVDkxpvFYJoUAR1G90="/>
+        <file name="local:///policy/ratelimit-gwp/log-r10-per-min.js" src="local/policy/ratelimit-gwp/log-r10-per-min.js" location="local" hash="1NkHNYe8q55veeDz9K6LmnijBr4="/>
+        <file name="local:///policy/ratelimit-gwp/log-r5-per-min.js" src="local/policy/ratelimit-gwp/log-r5-per-min.js" location="local" hash="2r4hDFao+7aYaa53s/EwS06UO+A="/>
+        <file name="local:///policy/ratelimit-gwp/log-r2-per-min.js" src="local/policy/ratelimit-gwp/log-r2-per-min.js" location="local" hash="qjkgehQuZo9OQWoU7JCk5e14HYw="/>
+        <file name="local:///policy/ratelimit-gwp/log-r1-per-min.js" src="local/policy/ratelimit-gwp/log-r1-per-min.js" location="local" hash="k/uE4DWjpVcEF00XcaYxEU96rW0="/>
+
+        <file name="webgui:///clixform.xsl" src="dp-aux/clixform.xsl" location="dp-aux" internal="true" hash="JWCmCYFwjG0ku59O8LehfGCkiIM="/>
+        <file name="webgui:///SchemaUtil.xsl" src="dp-aux/SchemaUtil.xsl" location="dp-aux" internal="true" hash="ZnCYHBrcIPvfLAXYOIKIL0KXIbo="/>
+        <file name="webgui:///management.xsl" src="dp-aux/management.xsl" location="dp-aux" internal="true" hash="pi0c46mGrlbqTpsWjG3QUxFOCYU="/>
+        <file name="webgui:///map-dmz.xsl" src="dp-aux/map-dmz.xsl" location="dp-aux" internal="true" hash="S8LbpfukTeInHK2d6DnQfdiZmd4="/>
+        <file name="webgui:///drMgmt.xml" src="dp-aux/drMgmt.xml" location="dp-aux" internal="true" hash="5LTlW4i64EPB4kp3ML53i+NJYIg="/>
+        <file name="webgui:///basetypes.xml" src="dp-aux/basetypes.xml" location="dp-aux" internal="true" hash="HrLsg2FhC6fPlGYI25NijeP828E="/>
+    </files>
+</datapower-configuration>
