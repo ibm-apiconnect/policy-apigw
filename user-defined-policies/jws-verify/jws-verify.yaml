@@ -1,0 +1,174 @@
+policy: 1.0.0
+
+info:
+  title: Verify Signature
+  name: jws-verify
+  version: 2.0.0
+  description: Verify signature for Message using JWS
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    input:
+      label: Input Message
+      description: Name of the message to use as input
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    crypto:
+      label: "Crypto Object"
+      description: "Select the crypto object to use for validating the message signature"
+      type: string
+  required:
+    - crypto
+
+gateways:
+  - datapower-api-gateway
+  
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2023 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          // Simple JWS 'verify' example
+          //   - JSON serialization
+          //   - One signature
+          //   - Needs configurable key, signed message
+
+          var jose = require('jose');
+
+          var policyProperties = context.get('local.parameter');
+          // default input is context.message unless overridden in policy properties
+          var inputName = policyProperties.input? policyProperties.input: 'message';
+          var inputContextMsg = context.getMessage(inputName);
+          if (inputContextMsg) {
+            inputContextMsg.body.readAsJSON(function(error, json) {
+              if (error) {
+                context.reject('JWSVerifyError', `Error reading input: ${error.errorMessage}`);
+                context.message.statusCode = '500 Internal Server Error';
+              } else {
+                try {
+                  // Get the name of the mgmt object to use as the key
+                  var keyValue = policyProperties.crypto;
+
+                  // Parse the JWS object to extract the serialized values for the object's individual components.
+                  // An instance of JWSObject is returned, through which we can access the JWS content (signatures,
+                  // payload, and type - compact or json).
+                  var jwsSignedObject = jose.parse(json);
+
+                  // Access the per-signature data and set key for each signature for verification.
+                  // In this example, all signatures use the same key
+                  var signedJWSHeaders  = jwsSignedObject.getSignatures();
+                  for (var i = 0; i < signedJWSHeaders.length; i++) {
+                    var hdr = signedJWSHeaders[i];
+                    hdr.setKey(keyValue);
+                  }
+
+                  // Verify all signatures for which a key has been set.
+                  // At least one signature must have key set.
+                  var myVerifier = jose.createJWSVerifier(jwsSignedObject);
+                  myVerifier.validate( function(error){
+                    if (error) {
+                      // An error occurred during the validate process.
+                      context.reject('JWSVerifyError', error.errorMessage);
+                      context.message.statusCode = '500 Invalid';
+                    } else {
+                      // All signature verifications have succeeded.
+                      // Payload may be trusted.
+
+                      // default output is context.message unless overridden in policy properties
+                      var buffer =  jwsSignedObject.getPayload();
+                      var outputName = policyProperties.output? policyProperties.output: 'message';
+                      var outputContextMsg = context.getMessage(outputName) || context.createMessage(outputName);
+                      if (outputContextMsg) {
+                        outputContextMsg.body.write(buffer);
+                        // The verified and decrypted payload could be anything, determine the content type from the plain text payload
+                        outputContextMsg.header.set('Content-Type', getContentType(buffer.toString()));
+                      } else {
+                        context.reject('JWSVerifyError', `output message: '${outputName}' is not a valid context message`);
+                        context.message.statusCode = '500 Internal Server Error';
+                      }
+                    }
+                  });
+                } catch (verifyError) {
+                  context.reject('JWSVerifyError', verifyError.errorMessage);
+                  context.message.statusCode = '500 Internal Server Error';
+                }
+              }
+            });
+          } else {
+            context.reject('JWSVerifyError', `input message: '${inputName}' is not a valid context message`);
+            context.message.statusCode = '500 Internal Server Error';
+          }
+
+          function getContentType(payload) {
+            let contentType;
+            let firstChar = payload.slice(0, 1);
+            let lastChar = payload.slice(-1);
+            switch (firstChar) {
+              // first char JSON related (object)
+              case '{':
+                // last character end of an object, assume JSON
+                if (lastChar === '}') {
+                  contentType = 'application/json';
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // first char JSON related (array)
+              case '[':
+                // last character end of an array, assume JSON
+                if (lastChar === ']') {
+                  contentType = 'application/json';
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // first char XML related, assume payload is either XML or HTML
+              case '<':
+                if (lastChar  === '>') {
+                  // look for html element
+                  if (payload.match(/<html[ >]/gim)) { 
+                    contentType = 'text/html';
+                  } else {
+                    contentType = 'application/xml';
+                  }
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // the string data has to be treated as plain text
+              default:
+                contentType = 'text/plain';
+                break;
+            } // end switch(firstChar)
+            return contentType;
+          }
