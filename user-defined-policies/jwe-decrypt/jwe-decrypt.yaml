@@ -1,0 +1,189 @@
+policy: 1.0.0
+
+info:
+  title: Decrypt Message
+  name: jwe-decrypt
+  version: 2.0.0
+  description: Decrypt a Message using JWE
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    input:
+      label: Input Message
+      description: Name of the message to use as input
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    alg:
+      label: "Key Encryption Algorithm"
+      description: "Select a key encryption algorithm"
+      type: string
+      enum:
+       - RSA1_5
+       - RSA-OAEP
+       - RSA-OAEP-256
+       - A128KW
+       - A192KW
+       - A256KW
+    crypto:
+      label: "Crypto Object"
+      description: "Select the crypto object used to decrypt the message"
+      type: string
+  required:
+    - crypto
+    - alg
+
+gateways:
+  - datapower-api-gateway
+  
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2023 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          // Simple JWS 'decrypt' example
+          //   - JSON serialization
+          //   - Needs configurable key, encrypted message
+
+          var jose = require('jose');
+
+          var policyProperties = context.get('local.parameter');
+          // default input is context.message unless overridden in policy properties
+          var inputName = policyProperties.input? policyProperties.input: 'message';
+          var inputContextMsg = context.getMessage(inputName);
+          if (inputContextMsg) {
+            inputContextMsg.body.readAsJSON(function(error, json) {
+              if (error) {
+                context.reject('JWEDecryptError', `Error reading input: ${error.errorMessage}`);
+                context.message.statusCode = '500 Internal Server Error';
+              } else {
+                try {
+                  // Parse the JWE object to extract the serialized values for the object's individual components.
+                  // An instance of JWEObject is returned, through which we can access the JWE content.
+                  var jweObj = jose.parse(json);
+
+                  // Get the enumerated value to use as the key encryption algorithm.
+                  var algValue = policyProperties.alg;
+
+                  // Check if alg is the expected value.
+                  if (jweObj.getProtected('alg') != algValue) {
+                    context.reject('JWEDecryptError', 'alg parameter does not match the expected value. Abort!');
+                    context.message.statusCode = '500 Internal Server Error';
+                  }
+
+                  // Get the name of the mgmt object to use as the key
+                  var keyValue = policyProperties.crypto;
+
+                  // Set the key value for each recipient in the JWE object.
+                  jweObj.getRecipients().forEach(function (recipient) {
+                    recipient.setKey(keyValue);
+                  });
+
+                  // Decrypt the JWE object
+                  jose.createJWEDecrypter(jweObj).decrypt(function(error, buffer) {
+                    if (error) {
+                      // An error occurred during the decrypt process and is passed back
+                      // via the error parameter, since .decrypt is an asynchronous call.
+                      context.reject('JWEDecryptError', error.errorMessage);
+                      context.message.statusCode = '500 Internal Server Error';
+                    } else {
+                      // Since the decryption was successful, we can write the
+                      // plaintext to the output context.
+
+                      // default output is context.message unless overridden in policy properties
+                      var outputName = policyProperties.output? policyProperties.output: 'message';
+                      var outputContextMsg = context.getMessage(outputName) || context.createMessage(outputName);
+                      if (outputContextMsg) {
+                        outputContextMsg.body.write(buffer);
+                        // The decrypted payload could be anything, determine the content type from the plain text payload
+                        outputContextMsg.header.set('Content-Type', getContentType(buffer.toString()));
+                      } else {
+                        context.reject('JWEDecryptError', `output message: '${outputName}' is not a valid context message`);
+                        context.message.statusCode = '500 Internal Server Error';
+                      }
+                    }
+                  });
+                } catch (decryptError) {
+                  context.reject('JWEDecryptError', decryptError.errorMessage);
+                  context.message.statusCode = '500 Internal Server Error';
+                }
+              }
+            }); 
+          } else {
+            context.reject('JWEDecryptError', `input message: '${inputName}' is not a valid context message`);
+            context.message.statusCode = '500 Internal Server Error';
+          }
+
+          function getContentType(payload) {
+            let contentType;
+            let firstChar = payload.slice(0, 1);
+            let lastChar = payload.slice(-1);
+            switch (firstChar) {
+              // first char JSON related (object)
+              case '{':
+                // last character end of an object, assume JSON
+                if (lastChar === '}') {
+                  contentType = 'application/json';
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // first char JSON related (array)
+              case '[':
+                // last character end of an array, assume JSON
+                if (lastChar === ']') {
+                  contentType = 'application/json';
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // first char XML related, assume payload is either XML or HTML
+              case '<':
+                if (lastChar  === '>') {
+                  // look for html element
+                  if (payload.match(/<html[ >]/gim)) { 
+                    contentType = 'text/html';
+                  } else {
+                    contentType = 'application/xml';
+                  }
+                } else {
+                  // assume plain text
+                  contentType = 'text/plain';
+                }
+                break;
+              // the string data has to be treated as plain text
+              default:
+                contentType = 'text/plain';
+                break;
+            } // end switch(firstChar)
+            return contentType;
+          }
+

@@ -1,0 +1,173 @@
+policy: 1.0.0
+
+info:
+  title: Encrypt Message
+  name: jwe-encrypt
+  version: 2.0.0
+  description: Encrypt a Message using JWE
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    input:
+      label: Input Message
+      description: Name of the message to use as input
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    enc:
+      label: "Encryption Algorithm"
+      description: "Select an encryption algorithm"
+      type: string
+      enum:
+       - A128CBC-HS256
+       - A192CBC-HS384
+       - A256CBC-HS512
+       - A128GCM
+       - A192GCM
+       - A256GCM
+    alg:
+      label: "Key Encryption Algorithm"
+      description: "Select a key encryption algorithm"
+      type: string
+      enum:
+       - RSA1_5
+       - RSA-OAEP
+       - RSA-OAEP-256
+       - A128KW
+       - A192KW
+       - A256KW
+    crypto:
+      label: "Crypto Object"
+      description: "Select the crypto object used to encrypt the message"
+      type: string
+  required:
+    - enc
+    - alg
+    - crypto
+
+gateways:
+  - datapower-api-gateway
+  
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2023 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          // Simple JWS 'encrypt' example
+          //   - JSON serialization
+          //   - Needs configurable enc, alg, key, message
+
+          var jose = require('jose');
+
+          var policyProperties = context.get('local.parameter');
+          // default input is context.message unless overridden in policy properties
+          var inputName = policyProperties.input? policyProperties.input: 'message';
+          var inputContextMsg = context.getMessage(inputName);
+          if (inputContextMsg) {
+            // readAsBuffer to read the input payload
+            inputContextMsg.body.readAsBuffer(function(error, buffer) {
+              if (error) {
+                context.reject('JWEEncryptError', `Error reading input: ${error.errorMessage}`);
+                context.message.statusCode = '500 Internal Server Error';
+              } else {
+                // Get the enumerated value to use as the encryption algorithm. Valid options are:
+                //   - A128CBC-HS256
+                //   - A192CBC-HS384
+                //   - A256CBC-HS512
+                //   - A128GCM
+                //   - A192GCM
+                //   - A256GCM
+                var encValue = policyProperties.enc;
+
+                // Create a JWEHeader object, passing the encryption algorithm as an argument.
+                var jweHdr = jose.createJWEHeader(encValue);
+
+                // Get the enumerated value to use as the key encryption algorithm.
+                // Valid options are:
+                //    - RSA1_5        (Key Encryption algorithm)
+                //    - RSA-OAEP      (Key Encryption algorithm)
+                //    - RSA-OAEP-256  (Key Encryption algorithm)
+                //    - A128KW        (Key Wrapping algorithm)
+                //    - A192KW        (Key Wrapping algorithm)
+                //    - A256KW        (Key Wrapping algorithm)
+                var algValue = policyProperties.alg;
+
+                // Get the name of the mgmt object to use as the key
+                var keyValue = policyProperties.crypto;
+
+                // Set the 'alg' protected header and the single recipient's key value.
+                jweHdr.setProtected('alg', algValue);
+                jweHdr.addRecipient(keyValue);
+
+                // 1. Specify which jweHeader defines how to encrypt this message, to create a JWEEncrypter object.
+                // 2. Update the JWEEncrypter object with the message to be encrypted.
+                // 3. Encrypt the JWEEncrypter object using JSON serialization output format
+                jose.createJWEEncrypter(jweHdr).update(buffer).encrypt('json', function(error, jweJSONObj) {
+                  if (error) {
+                    // An error occurred during the encrypt process and is passed back
+                    // via the error parameter since .encrypt is an asynchronous call.
+                    context.reject('JWEEncryptError', error.errorMessage);
+                    context.message.statusCode = '500 Internal Server Error';
+                  } else {
+                    // Encryption was successful. The resulting 'jweCompactObj' is a JSON object, which
+                    // can be written to the output context.
+                    // The object's format is:
+                    //   {
+                    //   "protected":"BASE64URL(UTF8(JWE Protected Header))",
+                    //   "unprotected":"JWE Shared Unprotected Header"",
+                    //   "recipients":[
+                    //   {"header":JWE Per-Recipient Unprotected Header 1,
+                    //   "encrypted_key":"BASE64URL(JWE Encrypted Key 1)"},
+                    //   ...
+                    //   {"header":JWE Per-Recipient Unprotected Header 2,
+                    //   "encrypted_key":"BASE64URL(JWE Encrypted Key N)"}],
+                    //   "aad":"BASE64URL(JWE AAD))",
+                    //   "iv":"BASE64URL(JWE Initialization Vector)",
+                    //   "ciphertext":"BASE64URL(JWE Ciphertext)",
+                    //   "tag":"BASE64URL(JWE Authentication Tag)"
+                    //   }
+
+                    // default output is context.message unless overridden in policy properties
+                    var outputName = policyProperties.output? policyProperties.output: 'message';
+                    var outputContextMsg = context.getMessage(outputName) || context.createMessage(outputName);
+                    if (outputContextMsg) {
+                      outputContextMsg.body.write(jweJSONObj);
+                      outputContextMsg.header.set('Content-Type', "application/json");
+                    } else {
+                      context.reject('JWEEncryptError', `output message: '${outputName}' is not a valid context message`);
+                      context.message.statusCode = '500 Internal Server Error';
+                    }
+                  }
+                });
+              }
+            });
+          } else {
+            context.reject('JWEEncryptError', `input message: '${inputName}' is not a valid context message`);
+            context.message.statusCode = '500 Internal Server Error';
+          }

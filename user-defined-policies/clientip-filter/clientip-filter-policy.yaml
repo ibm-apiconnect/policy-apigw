@@ -1,0 +1,206 @@
+policy: 1.0.0
+
+info:
+  title: Access Control By ClientIP
+  name: clientip-filter
+  version: 2.0.0
+  description: Validates the client ip against the UDP rules
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    ipACL:
+      label: Array of access control policies
+      description: Access Control Policies
+      type: array
+      items:
+        type: object
+        properties:
+          accessType:
+            label: "Access Type"
+            description: "With allow selected, the range of IP addresses is granted access to the service. With deny selected, the range of IP address is denied access to the service."
+            type: string
+            enum:
+              - allow
+              - deny
+            default: "allow"
+          ipRange:
+            label: "Address Range"
+            description: "An IP address and network mask that defines a contiguous range of IP addresses, either granted or denied access to the current service."
+            type: string
+            maxlength: 18
+            pattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])((\\/([0-9]|[1-2][0-9]|3[0-2]))?)$"
+        required:
+          - accessType
+          - ipRange
+  required:
+    - ipACL
+
+gateways:
+  - datapower-api-gateway
+
+assembly:
+  execute:
+    - xslt:
+        version: 2.0.0
+        source: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!--
+            Copyright 2023 IBM Corporation
+
+            Licensed under the Apache License, Version 2.0 (the "License");
+            you may not use this file except in compliance with the License.
+            You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+            Unless required by applicable law or agreed to in writing, software
+            distributed under the License is distributed on an "AS IS" BASIS,
+            WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+            See the License for the specific language governing permissions and
+            limitations under the License.
+          -->
+          <xsl:stylesheet version="1.0" 
+             xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+             xmlns:dp="http://www.datapower.com/extensions"
+             xmlns:json="http://www.ibm.com/xmlns/prod/2009/jsonx"
+             xmlns:apigw="http://www.ibm.com/xmlns/datapower/2017/11/apigateway"
+             extension-element-prefixes="dp apigw"
+             exclude-result-prefixes="dp json apigw"> 
+            <xsl:template match="/">
+              <!-- In the assembly function, the ipACL parameter is the only parameter defined, and it is defined as a string,
+                   and yet its schema is of an array of objects, with each object containing ipRange and accessType strings. By
+                   getting just the ipACL parameter from the assembly function call action local parameters, it will have the
+                   value of ipACL but not the JSON key.  First add the overall object with the ipACL key to the ipACL parameter
+                   value, and then convert that string to JSONx.
+
+                   At that point there are a number of options that can be taken:
+                   1. Execute an identify transformation to convert the JSONx to a flat XML nodelist that can be easily searched with XPath
+                      This is the current approach taken below
+                   2. dp:stringToJSONx(apigw:get-variable('local.parameter.ipACL')) will produce an unnamed array,
+                      so you could change the identity transformation to assume unnamed arrays to be ipACL which would
+                      produce the same flag XML nodelist.  This avoids the concatenation of the ipACL property to the
+                      local parameter ipACL value.
+                   3. Forego the identity transform and use dp:stringToJSONx(apigw:get-variable('local.parameter.ipACL')) result
+                      to xpath through the conditional that decides if the policy should pass or not, ie
+                      <xsl:if test="not($properties/json:array/json:object[json:string[@name = 'accessType'] = 'allow' and dp:ip-addr-match(json:string[@name = 'ipRange'] ,$ip)]) or
+                                    ($properties/json:array/json:object[json:string[@name = 'accessType'] = 'deny' and dp:ip-addr-match(json:string[@name = 'ipRange'] ,$ip)])">
+              -->
+              <xsl:variable name="ipACL" select="concat('{&quot;ipACL&quot;:', apigw:get-variable('local.parameter.ipACL'), '}')" />
+              <xsl:variable name="jsonxProperties" select="dp:stringToJSONx($ipACL)" />
+              <xsl:variable name="properties">
+                <xsl:apply-templates select="$jsonxProperties" mode="policyproperties"/>
+              </xsl:variable>
+
+              <!-- no properties means no restrictions -->
+              <xsl:if test="count($properties/*) != 0" >
+                <xsl:variable name="ip" select="dp:client-ip-addr()"/>
+                <!-- reject if not allowed explicitly or is in disallow explicitly -->
+                <xsl:if test="not($properties/ipACL[accessType = 'allow' and dp:ip-addr-match(ipRange ,$ip)]) or
+                              ($properties/ipACL[accessType = 'deny' and dp:ip-addr-match(ipRange ,$ip)])">
+                  <apigw:reject identifier="'ForbiddenError'" status-code="403" reason="'Forbidden'">Client IP is not allowed by policy</apigw:reject>
+                </xsl:if>
+              </xsl:if>
+            </xsl:template>
+
+            <!-- 
+                 The following identity transformation will transform the policy JSONx to a flat XML such as
+
+                 <json:object xsi:schemaLocation="http://www.datapower.com/schemas/json jsonx.xsd"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xmlns:json="http://www.ibm.com/xmlns/prod/2009/jsonx">
+                   <json:array name="ipACL">
+                     <json:object>
+                       <json:string name="accessType">allow</json:string>
+                       <json:string name="ipRange">1.2.3.4/32</json:string>
+                     </json:object>
+                     <json:object>
+                       <json:string name="accessType">allow</json:string>
+                       <json:string name="ipRange">1.2.3.5/32</json:string>
+                     </json:object>
+                   </json:array>
+                 </json:object>
+
+                 to
+
+                 <ipACL>
+                   <accessType>allow</accessType>
+                   <ipRange>1.2.3.4/32</ipRange>
+                 </ipACL>
+                 <ipACL>
+                   <accessType>allow</accessType>
+                   <ipRange>1.2.3.5/32</ipRange>
+                 </ipACL>
+            -->
+            <!-- json:object if named will create an element of that name.  In either
+                 case (named or unnamed), traverse to the children elements -->
+            <xsl:template match="json:object" mode="policyproperties">
+              <xsl:choose>
+                <xsl:when test="@name">
+                  <xsl:element name="{@name}">
+                    <xsl:apply-templates select="node()" mode="policyproperties"/>
+                  </xsl:element>
+                </xsl:when>
+                <xsl:otherwise>
+                  <xsl:apply-templates select="node()" mode="policyproperties"/>
+                </xsl:otherwise>
+              </xsl:choose>
+            </xsl:template>
+
+            <!-- json:array if named will create an element of that name for each
+                 of its children elements.  In either case (named or unnamed), traverse
+                 the children elements -->
+            <xsl:template match="json:array" mode="policyproperties">
+              <xsl:variable name="arrayName" select="@name" />
+              <xsl:for-each select="./*">
+                <xsl:choose>
+                  <xsl:when test="$arrayName">
+                    <xsl:element name="{$arrayName}">
+                      <xsl:apply-templates select="." mode="policyproperties"/>
+                    </xsl:element>
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:apply-templates select="." mode="policyproperties"/>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </xsl:for-each>
+            </xsl:template>
+
+            <!-- json non null primitives, if named will create an element of that name.
+                 In either case (named or unnamed), output the value of the primitive. -->
+            <xsl:template match="json:string|json:number|json:boolean" mode="policyproperties">
+              <xsl:choose>
+                <xsl:when test="@name">
+                  <xsl:element name="{@name}">
+                    <xsl:value-of select="text()"/>
+                  </xsl:element>
+                </xsl:when>
+                <xsl:otherwise>
+                  <xsl:value-of select="text()"/>
+                </xsl:otherwise>
+              </xsl:choose>
+            </xsl:template>
+
+            <!-- json:null if named will create an empty element -->
+            <xsl:template match="json:null" mode="policyproperties">
+              <xsl:if test="@name">
+                <xsl:element name="{@name}"/>
+              </xsl:if>
+            </xsl:template>
+
+            <!-- since we are not doing an apply-template selecting attributes,
+                 this template should not see any attributes, but it will see
+                 text nodes between elements that we don't care about, so toss
+                 these nodes -->
+            <xsl:template match="@* | node()" mode="policyproperties"/>
+
+          </xsl:stylesheet>

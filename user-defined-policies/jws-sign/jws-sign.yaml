@@ -1,0 +1,157 @@
+policy: 1.0.0
+
+info:
+  title: Sign Message
+  name: jws-sign
+  version: 2.0.0
+  description: Sign a Message using JWS
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    input:
+      label: Input Message
+      description: Name of the message to use as input
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    alg:
+      label: "Cryptographic Algorithm"
+      description: "Select a cryptographic algorithm"
+      type: string
+      enum:
+       - HS256
+       - HS384
+       - HS512
+       - RS256
+       - RS384
+       - RS512
+       - ES256
+       - ES384
+       - ES512
+       - PS256
+       - PS384
+       - PS512
+    crypto:
+      label: "Crypto Object"
+      description: "Select the crypto object used to sign the message"
+      type: string
+  required:
+    - alg
+    - crypto
+
+gateways:
+  - datapower-api-gateway
+  
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2023 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          // Simple JWS 'sign' example
+          //   - JSON serialization
+          //   - One signature
+          //   - Needs configurable alg, key, message
+
+          var jose = require('jose');
+
+          var policyProperties = context.get('local.parameter');
+          // default input is context.message unless overridden in policy properties
+          var inputName = policyProperties.input? policyProperties.input: 'message';
+          var inputContextMsg = context.getMessage(inputName);
+          if (inputContextMsg) {
+            // readAsBuffer to read the input payload
+            inputContextMsg.body.readAsBuffer(function(error, buffer) {
+              if (error) {
+                context.reject('JWSSignError', `Error reading input: ${error.errorMessage}`);
+                context.message.statusCode = '500 Internal Server Error';
+              } else {
+                // Get the enumerated value to use as the signing algorithm.
+                // The following values for the algorithm are supported:
+                //    HS256
+                //    HS384
+                //    HS512
+                //    RS256
+                //    RS384
+                //    RS512
+                //    ES256
+                //    ES384
+                //    ES512
+                //    PS256
+                //    PS384
+                //    PS512
+                var algValue = policyProperties.alg;
+
+                // Get the name of the mgmt object to use as the key
+                var keyValue = policyProperties.crypto;
+
+                // Create a JWSHeader object to define the header parameters for the JWS.
+                var jwsHdr = jose.createJWSHeader(keyValue, algValue);
+
+                // 1. Create a JWSSigner object using the parameters defined in the jwsHdr.
+                // 2. Update the JWSSigner object with the jwsBuffer payload to be signed.
+                // 3. Sign the JWS content and return a jwsObj in the json output format.
+                jose.createJWSSigner(jwsHdr).update(buffer).sign('json', function(error, jwsObj) {
+                  if (error) {
+                    // An error occurred during the sign process and is passed back
+                    // via the error parameter, since .sign is an asynchronous call.
+                    context.reject('JWSSignError', error.errorMessage);
+                    context.message.statusCode = '500 Invalid';
+                  } else {
+                    // Signing was successful. The resulting jwsObj is a JWS JSON Serialization object,
+                    // with the following format:
+                    // {
+                    //   "payload":"BASE64URL(JWS Payload)",
+                    //   "signatures":[
+                    //     {"protected":"BASE64URL(UTF8(JWS Protected Header 1))",
+                    //      "header":<non-integrity-protected header 1 contents>,
+                    //      "signature":"BASE64URL(JWS Signature 1)"},
+                    //     ...
+                    //     {"protected":"BASE64URL(UTF8(JWS Protected Header N))",
+                    //      "header":<non-integrity-protected header N contents>,
+                    //      "signature":"BASE64URL(JWS Signature N)"}]
+                    //  }
+
+                    // default output is context.message unless overridden in policy properties
+                    var outputName = policyProperties.output? policyProperties.output: 'message';
+                    var outputContextMsg = context.getMessage(outputName) || context.createMessage(outputName);
+                    if (outputContextMsg) {
+                      outputContextMsg.body.write(jwsObj);
+                      outputContextMsg.header.set('Content-Type', "application/json");
+                    } else {
+                      context.reject('JWSSignError', `output message: '${outputName}' is not a valid context message`);
+                      context.message.statusCode = '500 Internal Server Error';
+                    }
+                  }
+                });
+              }
+            });
+          } else {
+            context.reject('JWSSignError', `input message: '${inputName}' is not a valid context message`);
+            context.message.statusCode = '500 Internal Server Error';
+          }
