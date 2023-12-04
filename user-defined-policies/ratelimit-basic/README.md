@@ -123,3 +123,7 @@ After the count goes below 0, you get a 429 response:
 {"httpCode":"429","httpMessage":"Too Many Requests","moreInformation":"Assembly Rate Limit exceeded"}
 
 #### This user defined policy allows you to rate limit apis without subscribing to a plan in an application that uses a client id or secret. However you can also use it in addition to apis that are secured by client ids or or secrets.
+
+## Prerequisites
+
+    - IBM Datapower 10.5.0.x or later
