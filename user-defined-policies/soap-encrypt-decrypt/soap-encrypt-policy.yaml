@@ -1,0 +1,179 @@
+policy: 1.0.0
+
+info:
+  title: SOAP Encrypt Policy
+  name: soap-encrypt-policy
+  version: 1.0.0
+  description: Encrypt a SOAP message using WS Security
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+gateways:
+  - datapower-api-gateway
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    title:
+      label: "Title"
+      type: string
+      default: "soap-encrypt-policy"
+    description:
+      label: "Description"
+      type: string
+    input:
+      label: Input Message
+      description: Name of the message to use as input
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    certificate:
+      label: "Recipient certificate"
+      description: "Object name for the X.509 crypto certificate used to encrypt the SOAP message."
+      type: string
+  required:
+    - key
+
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2024 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          var ms = require('multistep');
+          var util = require('util');
+
+          // default options for this UDP (soap-encrypt-policy)
+          let options = 
+          {
+              "ruleName": "encrypt-soap-message_1.0.0", // name of multistep rule to call, non-default name
+              "input": {
+                "name": "message",     // option of message if not provided by policy properties
+                "read_body": true,     // option to read <name>.body, |false means to ignore <name>.body
+                "body_type": "xml",    // option to read <name>.body.readAs<type>
+                "headers": null        // option of which headers from <name.headers> are to be marshaled to the called rule, none|all, default none
+              },
+              "output": {
+                "name": "message",     // default of message if not provided by policy properties
+                "read_body": true,     // option to read the called rule's body if an output name is provided, | false would ignore the called rule body
+                "update_body": true,   // option to update <name>.body with the called rule's body if an output name is provided,
+                                       // true would indicate to update <name>.body, use false if the update is done in the post_call callback
+                "body_type": "xml",    // option to read called rule output with <name>.body.readAs<type>
+                "headers": null        // option of which headers from the called rule are to be marshaled to output <name.headers>, none|set|merge, default none
+              },
+              "callbacks": {
+                "pre_call": validateInput // function to validate the input body.
+              },
+              // the ms.callRuleExecute function will produce a ms context variable, var://context/msRuleContext/properties. For an APIGW UDP
+              // this will be automatically populated with the UDP properties and their values by the callRuleWrapperInit call.
+              "properties": {}
+          };
+
+          let debugObj = ms.callRuleWrapperInit(options);
+          debugObj.console.error(`${options.ruleName} after callRuleWrapperInit`);
+
+          if (options.properties.input) {
+            // the default options for input are to use message as the name and use_body as true.
+            // since a policy property of input was provided, override the name with the API provided name
+            options.input.name = options.properties.input;
+          }
+          if (options.properties.output) {
+            // the default options for output are to use message as the name and use_body as true.
+            // since a policy property of output was provided, override the name with the API provided name
+            options.output.name = options.properties.output;
+          }
+
+          // all other UDP properties are custom to the policy usage, either to be used by a callback function or the called rule itself.
+
+          //get the ball rolling!!!
+          ms.callRuleWrapper(options, function(error) {
+            if (error) {
+              debugObj.console.error(`${options.ruleName} ${error.errorMessage}`);
+            } else {
+              debugObj.console.info(`${options.ruleName} called rule completed successfully`);
+            }
+          });
+
+          /*
+          * validateInput - user written function for the soap-decrypt|encrypt-policy. It inspects the input message's payload to ensure
+          *                 it is present and the message's content type header indicates the payload is XML SOAP request.
+          *                 It also ensures that the XML has a soap:Envelope element, either soap11 or soap12
+          * @options - the consolidated bridge options, not used in this function (but it could be used based on requirements)
+          * @contextMsg - the input message's context
+          * @contextHdrs - the input message's context headers object, used to retrieve the message's content-type header
+          * @calledRuleHdrs - the called rule's input headers object, used to set or update headers being sent to the called rule
+          * @inBody - the input document that was read from the input message
+          * 
+          * @return - a boolean that indicates if the input is valid and processing should continue
+          */
+          function validateInput(options, contextMsg, contextHdrs, calledRuleHdrs, inBody){
+            let isValid = false;
+            if (inBody) {
+              // The input context returned a XML object for the body
+              // if the message's Content-Type header is also JSON
+              // consider the payload valid so it will be passed to the multistep rule
+              let contentType = contextHdrs.get('Content-Type');
+              if (session._isAssemblyAction) {
+                if (context.isXML(contentType)) {
+                  isValid = isSOAP(inBody);
+                }
+              } else {
+                // NOTE: isJSON|isXML exists on the APIGW context, but does not on the session object, so
+                //       check if the content type has the text json
+                if (contentType.includes('xml')) {
+                  isValid = isSOAP(inBody);
+                }
+              }
+            }
+            return isValid;
+          }
+
+          /*
+          * isSoap - user written function for the soap-decrypt|encrypt-policy. It inspects the input message's payload to ensure
+          *          that the XML has a soap:Envelope element, either soap11 or soap12
+          * @body  - the parsed input XML that was read from the input message
+          * 
+          * @return - a boolean that indicates if the input is valid
+          */
+          function isSOAP(body) {
+            let isValid = false;
+            let type = util.safeTypeOf(body);
+            // the readAsXML should have provided a valid XML data type, but check to make sure
+            if (type === 'document' || type === 'nodelist') {
+              let xmlDom;
+              if (type === 'nodelist') {
+                xmlDom = body.item(0);
+              } else {
+                xmlDom = body;
+              }
+              // get the root body element to ensure it is a soap:Envelope for both soap types.
+              if (xmlDom.nodeName && xmlDom.nodeName.includes(':Envelope') && 
+                  (xmlDom.namespaceURI === 'http://schemas.xmlsoap.org/soap/envelope/' || 
+                   xmlDom.namespaceURI === 'http://www.w3.org/2003/05/soap-envelope' )) {
+                isValid = true;
+              }
+            }
+            return isValid;
+          }
