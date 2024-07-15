@@ -85,7 +85,7 @@ It may also be deployed using the API Connect Toolkit. See
         If not specified, the `message` context message will be assumed. If a context message name is provided that does
         not exist, it will be created. The output payload will be written to the context message's .body property.
     - Recipient certificate:
-        This is a required properly. Specify the name of the DataPower Crypto Certificate Object used to encrypt the message. Note
+        This is a required property. Specify the name of the DataPower Crypto Certificate Object used to encrypt the message. Note
         that the desired public certificate file must be referenced by the Crypto Certificate Object provided. Any decryption of
         of this message must utilize the private key file that is associated with the public certificate file used.  
 
@@ -133,7 +133,7 @@ It may also be deployed using the API Connect Toolkit. See
         If not specified, the `message` context message will be assumed. If a context message name is provided that does
         not exist, it will be created. The output payload will be written to the context message's .body property.
     - Private key:
-        This is a required properly. Specify the name of the DataPower Crypto Key Object used to decrypt the message. Note
+        This is a required property. Specify the name of the DataPower Crypto Key Object used to decrypt the message. Note
         that the desired private key file must be referenced by the Crypto Key Object provided. The decryption of
         of this message must utilize the private key file that is associated with the public certificate file used to originally
         encrypt the message.
