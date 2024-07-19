@@ -1,0 +1,178 @@
+policy: 1.0.0
+
+info:
+  title: SAML Validation Policy
+  name: saml-validation-policy
+  version: 2.0.0
+  description: Validates a message with a digitally signed SAML Assertion
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    title:
+      label: "Title"
+      type: string
+      default: "saml-validation-policy"
+    description:
+      label: "Description"
+      type: string
+    input:
+      label: input message
+      description: name of the message to use as input
+      type: string
+    truststore:
+      label: "TLS Profile Name"
+      description: "Name of the TLS Profile that contains the truststore to validate the digital signature of the SAML assertion"
+      type: string
+  required:
+    - input
+    - truststore
+
+gateways:
+  - datapower-api-gateway
+
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2023 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          // UDP properties - obtained by the ms.callRuleWrapperInit function but passed to all customer
+          // written callback functions:
+          // - if an input .body is required for this invocation, a property named "input" must be
+          //   present and contain the context name where the body will be read
+          // - if an output .body will be updated by this invocation from the called rule's output,
+          //   a property named "output" must be present and contain the context name where
+          //   the called rule result will be written
+          // - Other properties may be specified based upon the need of the customer provided callback
+          //   functions or by the called rule itself.
+          // General flow:
+          // - initialization to setup an options object with references to the callback functions
+          // - call the ms.callRuleWrapper function, providing the options object which would include any
+          //   user written callback functions
+          //
+          // User written functions:
+          // - pre_call: executed after an optional input context read is attempted,
+          //   may determine if the conditions are present to continue processing,
+          //   whether that be in the payload that was read, http headers, etc. It can also be
+          //   any code to be executed before the called rule.
+          //   If not provided, the called rule is always attempted. If present, this function
+          //   must always return a boolean to dictate if the called rule should execute or not.
+          // - post_call: an optional function, executed after the execution of the called
+          //   rule, for example, could write the called rule's output to a specified context message.
+          //   By default, a successful read of the rule output will be written to the API Gateway
+          //   context as a buffer when the options specify a context message to receive the output
+          // - post_error: an optional error handling function, provides the ability to do custom
+          //   error handling in case the called rule fails (setting http status codes, error messages,
+          //   etc, and whether to reject the transaction or not). If not present, a default error
+          //   handling is executed.
+
+          var ms = require('multistep');
+
+          // default options for this UDP
+          let options = 
+          {
+              "input": {
+                 "name": "message",    // option of message if not provided by policy properties
+                 "read_body": true,     // option to read <name>.body, |false means to ignore <name>.body
+                 "body_type": "xml",   // option to read <name>.body.readAs<type>
+                 "headers": null       // option of which headers from <name.headers> are to be marshaled to the called rule, none|all, default none
+              },
+              "output": {
+                "name": null,          // option of no context update with the called rule output payload
+                "read_body": false,    // option to read the called rule's body if an output name is provided, |true would indicate to read <name>.body
+                "update_body": false,  // option to update <name>.body with the called rule's body if an output name is provided,
+                                       // true would indicate to update <name>.body, use false if the update is done in the post_call callback
+                "body_type": null,     // option to read called rule output with <name>.body.readAs<type>
+                "headers": "none"      // option of which headers from the called rule are to be marshaled to output <name.headers>, none|set|merge, default none
+              },
+              "callbacks": {
+                "pre_call": validateInput, // function to validate the input body. If no callback, the validate is assumed successful and the ms rule is called
+                "post_call": null,         // function to copy the called rule output to <name>.body
+                "post_error": null         // function to override default error handling
+              },
+              // the ms.callRuleExecute function will produce a ms context variable, var://context/msRuleContext/properties. For an APIGW UDP
+              // this will be automatically populated with the UDP properties and their values.
+              "properties": {}
+          };
+
+          let debugObj = ms.callRuleWrapperInit(options);
+          debugObj.console.info(`${options.ruleName} after msRuleInit`);
+
+          // read the properties, in this case the UDP properties provided by the API developer,
+          // and override the default options based on the requirements of the UDP
+          if (options.properties.input) {
+              // the default options for input are to use message as the name and use_body as true.
+              // since a property of input was provided, override the name with the API provided name
+              options.input.name = options.properties.input;
+          }
+
+          // get the ball rolling!!!
+          ms.callRuleWrapper(options, function(error) {
+            if (error) {
+              debugObj.console.error(`${options.ruleName} ${error.errorMessage}`);
+            } else {
+              debugObj.console.info(`${options.ruleName} called rule completed successfully`);
+            }
+          });
+
+          /*
+          * validateInput - user written function for the saml-validation policy. It inspects the input message's payload to ensure
+          *                 it is present and the message's content type header indicates the payload is XML.
+          * @options - the consolidated bridge options, not used in this function (but it could be used based on requirements)
+          * @contextMsg - the input message's context
+          * @contextHdrs - the input message's context headers object, used to retrieve the message's content-type header
+          * @calledRuleHdrs - the called rule's input headers object, used to set or update headers being sent to the called rule
+          * @inBody - the input buffer that was read from the input message
+          * 
+          * @return - a boolean that indicates if the input is valid and processing should continue
+          */
+          function validateInput(options, contextMsg, contextHdrs, calledRuleHdrs, inBody){
+            let isValid = false;
+            if (inBody) {
+              // The input context returned a XML Document for the body
+              // if the message's Content-Type header is also JSON
+              // consider the payload valid so it will be passed to the multistep rule
+              let contentType = contextHdrs.get('Content-Type');
+              if (session._isAssemblyAction) {
+                if (context.isXML(contentType)) {
+                  isValid = true;
+                } else {
+                  debugObj.console.error(`${options.ruleName} The content type header for the request message is not XML`);
+                }
+              } else {
+                // NOTE: isJSON|isXML exists on the APIGW context, but does not on the session object, so
+                //       check if the content type has the text json
+                if (contentType.includes('xml')) {
+                  isValid = true;
+                } else {
+                  debugObj.console.error(`${options.ruleName} The content type header for the request message is not XML`);
+                }
+              }
+            } else {
+              debugObj.console.error(`${options.ruleName} No input message body was provided`);
+            }
+            return isValid;
+          }
