@@ -45,7 +45,7 @@ assembly:
     - gatewayscript:
         version: 2.0.0
         source: |
-          // Copyright 2023 IBM Corporation
+          // Copyright 2024 IBM Corporation
           //
           // Licensed under the Apache License, Version 2.0 (the "License");
           // you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ assembly:
                 }
               } else {
                 // NOTE: isJSON|isXML exists on the APIGW context, but does not on the session object, so
-                //       check if the content type has the text json
+                //       check if the content type has the text xml
                 if (contentType.includes('xml')) {
                   isValid = true;
                 } else {
