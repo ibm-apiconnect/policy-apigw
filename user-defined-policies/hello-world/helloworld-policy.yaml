@@ -1,0 +1,86 @@
+policy: 1.0.0
+
+info:
+  title: Hello World
+  name: hello-world-policy
+  version: 1.0.0
+  description: Hello world via rule bridge
+  contact: 
+    name: IBM DataPower Samples
+    url: https://github.com/ibm-datapower/
+    email: steve-product-manager@ibm.com
+
+attach:
+  - rest
+  - soap
+
+properties:
+  $schema: "http://json-schema.org/draft-04/schema#"
+  type: object
+  properties:
+    title:
+      label: "Title"
+      type: string
+      default: "hello-world-policy"
+    description:
+      label: "Description"
+      type: string
+    output:
+      label: Output Message
+      description: Name of the message to save the output
+      type: string
+    name:
+      label: Name
+      description: Name to say hello to
+      type: string
+  required:
+    - name
+
+gateways:
+  - datapower-api-gateway
+  
+assembly:
+  execute:
+    - gatewayscript:
+        version: 2.0.0
+        source: |
+          // Copyright 2024 IBM Corporation
+          //
+          // Licensed under the Apache License, Version 2.0 (the "License");
+          // you may not use this file except in compliance with the License.
+          // You may obtain a copy of the License at
+          //
+          // http://www.apache.org/licenses/LICENSE-2.0
+          //
+          // Unless required by applicable law or agreed to in writing, software
+          // distributed under the License is distributed on an "AS IS" BASIS,
+          // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          // See the License for the specific language governing permissions and
+          // limitations under the License.
+
+          let ms = require("multistep");
+          let options = {
+            "ruleName": "hello-world_1.0.0",
+            "output": {
+              "name": "message",
+              "read_body": true,
+              "body_type": "xml",
+              "update_body": true,
+              "headers": "merge"
+            }
+            // NOTE the callRuleWrapperInit will add the UDP properties for you 
+          };
+
+          let debugObj = ms.callRuleWrapperInit(options);
+          if (options.properties.output) {
+            options.output.name = options.properties.output;
+          }
+
+          //get the ball rolling!!!
+          ms.callRuleWrapper(options, function(error) {
+            if (error) {
+              debugObj.console.error(`${options.ruleName} ${error.errorMessage}`);
+            } else {
+              debugObj.console.info(`${options.ruleName} called rule completed successfully`);
+            }
+          });
